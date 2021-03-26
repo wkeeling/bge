@@ -1,30 +1,104 @@
 """This is the Battleship Game Engine.
 
 This module contains the components required to run a game of Battleship.
-Clients should call start_game() to begin a new game.
+
+Usage:
+
+>>> game = Game()
+>>>
+>>> grid = game.create_grid('John')
+>>> grid.add_ship(destroyer, ('A', 1), Orientation.E)
+>>> grid.add_ship(submarine, ('D', 9), Orientation.S)
+>>> grid.add_ship(cruiser, ('J', 10), Orientation.W)
+>>> grid.add_ship(battleship, ('I', 3), Orientation.N)
+>>> grid.add_ship(carrier, ('C', 2), Orientation.E)
+>>>
+>>> grid = game.create_grid('Jane')
+>>> grid.add_ship(destroyer, ('B', 2), Orientation.E)
+>>> grid.add_ship(submarine, ('B', 6), Orientation.S)
+>>> grid.add_ship(cruiser, ('F', 1), Orientation.S)
+>>> grid.add_ship(battleship, ('J', 3), Orientation.E)
+>>> grid.add_ship(carrier, ('G', 9), Orientation.N)
+>>>
+>>> game.current_player
+>>> 'John'
+>>> game.shoot(('A', 1))  # John is shooting at Jane
+>>>
 """
 from __future__ import annotations
+import itertools
 from enum import Enum
+from typing import Optional
 
 Coord = tuple[str, int]
 
 
-def start_game() -> Game:
-    """Start a new game of Battleship."""
-    return Game()
-
-
 class Game:
-    """Maintains state for a two player game of Battleship."""
+    """Maintains the state of a game of Battleship, coordinating player
+    turns and shooting.
+
+    After creating their grids, clients call shoot() in turn, based on the
+    value of current_player.
+    """
 
     def __init__(self):
-        self.player1: Grid = Grid()
-        self.player2: Grid = Grid()
+        self.players: dict[str, Grid] = {}
+        self.current_player: Optional[str] = None
+        self._player_seq = None
+
+    def create_grid(self, player_name: str) -> Grid:
+        """Creates a grid for a player, adding that player to the game.
+
+        Args:
+            player_name: the name of the player.
+        Returns:
+            the player's Grid.
+        """
+        if len(self.players) == 2:
+            raise RuntimeError('Game already has two players')
+
+        grid = Grid()
+
+        self.players[player_name] = grid
+        self._player_seq = itertools.cycle(self.players.keys())
+        self.current_player = next(self._player_seq)
+
+        return grid
+
+    def shoot(self, coord: Coord):
+        """Make a shot on the opponent's grid.
+
+        Args:
+            coord: the grid coordinate as (row, col).
+        Returns:
+            a tuple containing a boolean for a hit/miss,
+            a set of the remaning ships and a matrix representing
+            the current state of the grid.
+        """
+        opponent = self.players.keys() - self.current_player
+
+        if coord not in opponent:
+            raise InvalidCoordinate(f'Invalid grid coordinate {coord}')
+
+        hit = opponent.receive_shot(coord)
+        remaining_ships = opponent.ships_afloat()
+
+        if len(remaining_ships) > 0:
+            # Switch to the other player
+            self.current_player = next(self._player_seq)
+
+        return hit, remaining_ships, opponent.as_matrix
 
 
 class Grid:
-    """A Grid holds a player's ships and the shots that have been received
-    from the opponent player via them invoking the shoot() method.
+    """A Grid holds the position of a player's ships and the position of
+    the shots that have been received from the opponent player.
+
+    When a Grid is first created it holds no ships and ships must be added
+    via the add_ship() method.
+
+    An opponent makes a shot on the grid by calling receive_shot() and
+    passing in the coordinate of the shot.
     """
     # The number of spaces making up the width and height of the grid.
     size: int = 10
@@ -35,36 +109,110 @@ class Grid:
         self.ships: dict[Ship, list[Coord]] = {}
 
         # The shots that have been targeted at this grid to date.
-        self.shots: list[Coord] = []
+        self.shots: set[Coord] = set()
 
-        # The coordinates representing the top left and bottom right spaces
-        # on the grid based on the grid's size.
-        self._top_left = ('A', 1)
-        self._bottom_right = (chr(ord('A') + self.size - 1), self.size)
-
-    def position(self, ship: Ship, start: Coord, orientation: Orientation):
-        """Position a ship on the grid checking that the position is
-        valid based on the grid's current state.
-
-        Where a position is not valid, InvalidPosition will be raised.
+    def add_ship(self, ship: Ship, start: Coord, orientation: Orientation) -> None:
+        """Add a ship to the grid checking that the position is valid based on the
+        grid's current state.
 
         Args:
             ship: the ship to position.
             start: the coordinate of the start of the ship.
             orientation: the orientation of the ship from the start coordinate.
         Raises:
-            InvalidPosition: if the position of the ship is not fully on the
+            InvalidCoordinate: if the position of the ship is not fully on the
                 grid, or if it intersects with an existing ship on the grid.
         """
-        # if orientation == Orientation.N:
+        if orientation == Orientation.N:
+            row_inc, col_inc = -1, 0
+        elif orientation == Orientation.E:
+            row_inc, col_inc = 0, 1
+        elif orientation == Orientation.S:
+            row_inc, col_inc = 1, 0
+        elif orientation == Orientation.W:
+            row_inc, col_inc = 0, -1
+        else:
+            raise RuntimeError(f'Invalid orientation: {orientation}')
 
+        coords = []
 
-    def shoot(self, coord: Coord):
-        """Make a shot on the grid.
+        for i in range(ship.size):
+            coord = (chr(ord(start[0]) + (i * row_inc)), start[1] + (i * col_inc))
+
+            if coord not in self or coord in self._all_ship_coords():
+                # Ship extends off the board or intersects an existing ship's position
+                raise InvalidCoordinate(f'Invalid position for {ship.name}')
+
+            coords.append(coord)
+
+        self.ships[ship] = coords
+
+    def receive_shot(self, coord: Coord) -> bool:
+        """Receive a shot from the opponent player and return whether
+        the shot hit a ship.
 
         Args:
-            coord: the targeted grid coordinate as (row, col).
+            coord: The coordinate of the shot.
+        Returns:
+            True if the shot was a hit, False if it was a miss.
         """
+        if coord in self.shots:
+            raise InvalidCoordinate(f'Shot at {coord} has previously been made')
+
+        self.shots.add(coord)
+
+        return coord in self._all_ship_coords()
+
+    def as_matrix(self) -> list[list[Optional[bool]]]:
+        """Return a matrix of the current state of the grid.
+
+        The value of a cell in the matrix can be one of True, False, None.
+        True indicates a hit, False indicates a miss and None indicates
+        that the cell has yet to be targeted.
+
+        Returns:
+            the matrix as a list of lists.
+        """
+        matrix = []
+
+        for i in range(self.size):
+            row = []
+
+            for j in range(self.size):
+                coord = (chr(ord('A') + i), j + 1)
+                if coord in self.shots:
+                    row.append(coord in self._all_ship_coords())
+                else:
+                    row.append(None)
+
+            matrix.append(row)
+
+        return matrix
+
+    def ships_afloat(self) -> set:
+        """Return the ships that have not yet been sunk, i.e. any ships
+        that still have locations without shots.
+
+        Returns:
+            a set of the remaining ships afloat.
+        """
+        remaining_ships = set(self.ships.keys())
+
+        for ship, location in self.ships.items():
+            if self.shots.issuperset(set(location)):
+                remaining_ships.remove(ship)
+
+        return remaining_ships
+
+    def _all_ship_coords(self) -> set:
+        """Return the set of coordinates taken up by all ships."""
+        return set(itertools.chain(*self.ships.values()))
+
+    def __contains__(self, coord: Coord):
+        min_row, min_col = ('A', 1)
+        max_row, max_col = (chr(ord('A') + self.size - 1), self.size)
+
+        return min_row <= coord[0] <= max_row and min_col <= coord[1] <= max_col
 
 
 class Orientation(Enum):
@@ -75,10 +223,8 @@ class Orientation(Enum):
     W = 4
 
 
-class InvalidPosition(Exception):
-    """Indicates that a ship has been placed in an invalid position
-    on the grid.
-    """
+class InvalidCoordinate(Exception):
+    """Indicates that a coordinate is not valid on the grid."""
 
 
 class Ship:
@@ -96,8 +242,6 @@ class Ship:
     def __eq__(self, other: Ship) -> bool:
         if not isinstance(other, Ship):
             return False
-        if other == self:
-            return True
         return self.name == other.name and self.size == other.size
 
     def __hash__(self):
