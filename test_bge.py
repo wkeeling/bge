@@ -28,60 +28,55 @@ class TestGame:
         game.create_grid('John')
 
         assert len(game.players) == 1
-        assert game.current_player == 'John'
 
     def test_create_grid_two_players(self, game):
         assert len(game.players) == 2
-        assert game.current_player == 'John'
 
     def test_raise_exception_missing_grid(self):
         game = bge.Game()
 
         with pytest.raises(RuntimeError):
-            game.shoot(('A', 1))
+            game.shoot('John', ('A', 1))
 
     def test_raise_exception_missing_ships(self, game):
         game.players['John'].ships.pop(bge.submarine)
 
         with pytest.raises(RuntimeError):
-            game.shoot(('A', 1))
+            game.shoot('John', ('A', 1))
 
     def test_creates_player2(self, game):
         game.players.pop('Jane')  # Remove existing player 2
 
-        game.shoot(('A', 1))  # Computer will auto generate player 2
+        game.shoot(bge.COMPUTER, ('A', 1))  # Computer will assume player 2
 
         assert len(game.players) == 2
-        assert bge.PLAYER2_NAME in game.players
+        assert bge.COMPUTER in game.players
 
     def test_shoot_hit(self, game):
-        hit, *_ = game.shoot(('B', 2))
+        hit, *_ = game.shoot('Jane', ('B', 2))
 
-        assert game.current_player == 'Jane'
+        assert hit
 
     def test_shoot_miss(self, game):
-        hit, *_ = game.shoot(('A', 2))
+        hit, *_ = game.shoot('Jane', ('A', 2))
 
         assert not hit
 
-    def test_shoot_switches_player(self, game):
-        assert game.current_player == 'John'
-        game.shoot(('B', 2))
-
-        assert game.current_player == 'Jane'
-
     def test_shoot_sinks_ship(self, game):
         # Sink Jane's destroyer
-        game.shoot(('B', 2))
-        _, remaining, matrix = game.shoot(('B', 3))
-        print(matrix)
+        game.shoot('Jane', ('B', 2))
+        _, remaining, _ = game.shoot('Jane', ('B', 3))
 
         assert len(remaining) == 4
         assert bge.destroyer not in remaining
 
-    def test_raise_exception_invalid_coord(self, game):
+    def test_shoot_raise_exception_invalid_coord(self, game):
         with pytest.raises(bge.InvalidCoordinate):
-            game.shoot(('A', 12))
+            game.shoot('John', ('A', 12))
+
+    def test_shoot_invalid_player(self, game):
+        with pytest.raises(KeyError):
+            game.shoot('Jim', ('B', 2))
 
 
 class TestGrid:
@@ -139,7 +134,7 @@ class TestGrid:
 
     def test_receive_shot_hit(self):
         grid = bge.Grid()
-        grid.add_ship(bge.destroyer, ('A', 1), bge.Orientation.E)
+        grid.add_ship(bge.destroyer, ('A', 1), ('A', 2))
 
         hit = grid.receive_shot(('A', 2))
 
@@ -147,7 +142,7 @@ class TestGrid:
 
     def test_receive_shot_miss(self):
         grid = bge.Grid()
-        grid.add_ship(bge.destroyer, ('A', 2), bge.Orientation.E)
+        grid.add_ship(bge.destroyer, ('A', 2), ('A', 3))
 
         hit = grid.receive_shot(('A', 4))
 
