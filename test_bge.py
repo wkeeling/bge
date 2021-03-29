@@ -70,6 +70,23 @@ class TestGame:
         assert len(remaining) == 4
         assert bge.destroyer not in remaining
 
+    def test_shoot_compute_coord(self, game):
+        game.shoot('John')
+
+        assert len(game.players['John'].shots) == 1
+
+    def test_shoot_compute_hit(self, game):
+        # First make an explicit hit on the carrier
+        _, remaining, _ = game.shoot('John', ('C', 4))
+        assert bge.carrier in remaining
+
+        # Subsequent automatic hits should finish the carrier off
+        for _ in range(6):
+            game.shoot('John')
+        _, remaining, _ = game.shoot('John')
+
+        assert bge.carrier not in remaining
+
     def test_shoot_raise_exception_invalid_coord(self, game):
         with pytest.raises(bge.InvalidCoordinate):
             game.shoot('John', ('A', 12))

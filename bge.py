@@ -62,10 +62,10 @@ AUTO = object()
 
 
 class Game:
-    """Maintains the state of a game of Battleship, coordinating player
-    turns and shooting.
+    """Maintains the state of a game of Battleship, coordinating shooting
+    and automatic computation of coordinates when a single player vs computer.
 
-    After creating their grids, clients call shoot() in turn.
+    After creating their grids, players call shoot() in turn.
     """
 
     def __init__(self):
@@ -127,7 +127,9 @@ class Game:
             raise KeyError(
                 f"No such player '{target_player}' - valid players are {list(self.players.keys())}")
 
-        if target_coord not in target_grid:
+        if target_coord == AUTO:
+            target_coord = self._compute_coord(target_grid)
+        elif target_coord not in target_grid:
             raise InvalidCoordinate(f'Invalid grid coordinate {target_coord}')
 
         hit = target_grid.receive_shot(target_coord)
@@ -149,19 +151,76 @@ class Game:
                 # Create a random start coordinate
                 row = random.choice([chr(c) for c in range(ord('A'), ord('A') + grid.size)])
                 col = random.choice(range(1, 11))
+
                 # Randomly select the direction to generate the coordinates in
                 row_inc, col_inc = random.choice(((0, 1), (1, 0)))
-                coords = []
 
-                for i in range(ship.size):
-                    # Generate the ship coordinates
-                    coords.append((chr(ord(row) + (i * row_inc)), col + (i * col_inc)))
+                # Generate the ship coordinates
+                coords = [
+                    (chr(ord(row) + (i * row_inc)), col + (i * col_inc))
+                    for i in range(ship.size)
+                ]
 
                 try:
                     grid.add_ship(ship, *coords)
                     break
                 except InvalidCoordinate:
                     continue
+
+    def _compute_coord(self, grid):
+        # Create a set of all grid coordinates
+        all_coords = {
+            (chr(row), col)
+            for row in range(ord('A'), ord('A') + grid.size)
+            for col in range(1, 11)
+        }
+
+        # Default to randomly targeting a cell that hasn't been previously shot at
+        coord = random.sample(list(all_coords - grid.shots), 1)[0]
+        ship_hits = ()
+
+        for ship in grid.ships_afloat():
+            ship_hits = set(grid.ships[ship]) & grid.shots
+
+            if ship_hits:
+                # This ship has been shot but not yet sunk
+                break
+
+        if len(ship_hits) == 1:
+            # This ship has a single hit, so target an adjacent cell
+            row, col = ship_hits.pop()
+            increments = [(0, 1), (1, 0), (0, -1), (-1, 0)]
+
+            while True:
+                row_inc, col_inc = random.choice(increments)
+                increments.remove((row_inc, col_inc))
+                coord = (chr(ord(row) + (1 * row_inc)), col + (1 * col_inc))
+
+                if coord in grid and coord not in grid.shots:
+                    break
+
+        elif len(ship_hits) > 1:
+            # Ship has multiple hits - line the hits up
+            ship_hits = sorted(ship_hits)
+
+            # Figure out whether they're in a row or a column
+            row_diff = ord(ship_hits[1][0]) - ord(ship_hits[0][0])
+            col_diff = ship_hits[1][1] - ship_hits[0][1]
+
+            while True:
+                if row_diff == 0:
+                    # Hits are in a row so choose a cell either end
+                    coord = ship_hits[0][0], random.choice((ship_hits[0][1] - 1, ship_hits[-1][1] + 1))
+                elif col_diff == 0:
+                    # Hits are in a column so choose a cell top or bottom
+                    coord = random.choice(
+                        (chr(ord(ship_hits[0][0]) - 1), chr(ord(ship_hits[-1][0]) + 1))
+                    ), ship_hits[0][1]
+
+                if coord in grid and coord not in grid.shots:
+                    break
+
+        return coord
 
 
 class Grid:
@@ -204,14 +263,14 @@ class Grid:
 
         rows, cols = list(zip(*coords))
 
-        if rows.count(rows[0]) == len(rows):
+        if len(set(rows)) == 1:
             # Row is the same, so check cols are consecutive
             if sorted(cols) != list(range(min(cols), max(cols) + 1)):
                 raise InvalidCoordinate(f"Coordinate columns are not consecutive for '{ship}'")
-        elif cols.count(cols[0]) == len(cols):
+        elif len(set(cols)) == 1:
             # Col is the same, so check rows are consecutive
-            rows = [ord(r) for r in rows]
-            if sorted(rows) != list(range(min(rows), max(rows) + 1)):
+            rows = sorted(ord(r) for r in rows)
+            if rows != list(range(min(rows), max(rows) + 1)):
                 raise InvalidCoordinate(f"Coordinate rows are not consecutive for '{ship}'")
 
         for coord in coords:
@@ -265,8 +324,7 @@ class Grid:
         return matrix
 
     def ships_afloat(self) -> set:
-        """Return the ships that have not yet been sunk, i.e. the ships
-        that still have locations without shots.
+        """Return the ships that have not yet been sunk.
 
         Returns:
             a set of the remaining ships afloat.
@@ -278,14 +336,6 @@ class Grid:
                 remaining_ships.remove(ship)
 
         return remaining_ships
-
-    def ships_sunk(self) -> set:
-        """Return the ships that have been sunk.
-
-        Returns:
-            a set of the ships that have been sunk.
-        """
-        return set(self.ships.keys()) - self.ships_afloat()
 
     def _all_ship_coords(self) -> set:
         """Return the union of coordinates taken up by all ships."""
