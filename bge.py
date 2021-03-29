@@ -330,11 +330,11 @@ class Ship:
 
 
 # The five ships permitted by the game.
-carrier = Ship(name='Carrier', size=5)
-battleship = Ship(name='Battleship', size=4)
-cruiser = Ship(name='Cruiser', size=3)
-submarine = Ship(name='Submarine', size=3)
 destroyer = Ship(name='Destroyer', size=2)
+submarine = Ship(name='Submarine', size=3)
+cruiser = Ship(name='Cruiser', size=3)
+battleship = Ship(name='Battleship', size=4)
+carrier = Ship(name='Carrier', size=5)
 
 all_ships = {
     destroyer,

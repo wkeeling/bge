@@ -150,7 +150,7 @@ class TestGrid:
 
     def test_receive_shot_duplicate(self):
         grid = bge.Grid()
-        grid.add_ship(bge.destroyer, ('A', 2), bge.Orientation.E)
+        grid.add_ship(bge.destroyer, ('A', 2), ('A', 3))
         grid.receive_shot(('A', 2))
 
         with pytest.raises(bge.InvalidCoordinate):
@@ -158,11 +158,11 @@ class TestGrid:
 
     def test_as_matrix(self):
         grid = bge.Grid()
-        grid.add_ship(bge.destroyer, ('A', 1), bge.Orientation.E)
-        grid.add_ship(bge.submarine, ('D', 9), bge.Orientation.S)
-        grid.add_ship(bge.cruiser, ('J', 10), bge.Orientation.W)
-        grid.add_ship(bge.battleship, ('I', 3), bge.Orientation.N)
-        grid.add_ship(bge.carrier, ('C', 2), bge.Orientation.E)
+        grid.add_ship(bge.destroyer, ('A', 1), ('A', 2))
+        grid.add_ship(bge.submarine, ('D', 8), ('D', 9), ('D', 10))
+        grid.add_ship(bge.cruiser, ('J', 8), ('J', 9), ('J', 10))
+        grid.add_ship(bge.battleship, ('F', 3), ('G', 3), ('H', 3), ('I', 3))
+        grid.add_ship(bge.carrier, ('C', 2), ('C', 3), ('C', 4), ('C', 5), ('C', 6))
         grid.receive_shot(('A', 1))
         grid.receive_shot(('B', 3))
         grid.receive_shot(('C', 2))
@@ -193,8 +193,8 @@ class TestGrid:
 
     def test_ships_afloat(self):
         grid = bge.Grid()
-        grid.add_ship(bge.destroyer, ('A', 1), bge.Orientation.E)
-        grid.add_ship(bge.submarine, ('D', 9), bge.Orientation.S)
+        grid.add_ship(bge.destroyer, ('A', 1), ('A', 2))
+        grid.add_ship(bge.submarine, ('D', 9), ('E', 9), ('F', 9))
         grid.shots.update({
             ('A', 2),
             ('D', 9),
@@ -206,8 +206,8 @@ class TestGrid:
 
     def test_all_ship_coords(self):
         grid = bge.Grid()
-        grid.add_ship(bge.destroyer, ('A', 1), bge.Orientation.E)
-        grid.add_ship(bge.submarine, ('D', 9), bge.Orientation.S)
+        grid.add_ship(bge.destroyer, ('A', 1), ('A', 2))
+        grid.add_ship(bge.submarine, ('D', 9), ('E', 9), ('F', 9))
 
         assert grid._all_ship_coords() == {
             ('A', 1),
