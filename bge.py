@@ -347,6 +347,9 @@ class Grid:
 
         return min_row <= coord[0] <= max_row and min_col <= coord[1] <= max_col
 
+    def __str__(self):
+        return self.as_matrix()
+
 
 class InvalidCoordinate(Exception):
     """Indicates that a coordinate is not valid on the grid."""
