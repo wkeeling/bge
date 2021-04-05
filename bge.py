@@ -225,7 +225,8 @@ class Game:
 
 class Grid:
     """A Grid holds the position of a player's ships and the position of
-    the shots that have been received from the opponent player.
+    the shots that have been received from the opponent player, via the
+    'ships' and 'shots' attributes respectively.
 
     When a Grid is first created it holds no ships and ships must be added
     via the add_ship() method.
