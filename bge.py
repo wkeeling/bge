@@ -259,10 +259,12 @@ class Grid:
                 already positioned ship.
         """
         if len(coords) != ship.size:
-            raise InvalidCoordinate('The number of coordinates do not correspond to '
-                                    f"the size of the ship '{ship}'")
+            raise InvalidCoordinate(
+                'The number of coordinates do not correspond to '
+                f"the size of the ship '{ship}'"
+            )
 
-        rows, cols = list(zip(*coords))
+        rows, cols = zip(*coords)
 
         if len(set(rows)) == 1:
             # Row is the same, so check cols are consecutive
